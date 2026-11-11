@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASK modem explorer</title>
+<meta name="description" content="Interactive walkthrough of an ASK modulator and demodulator: ask_modem_top, sinus_gen and ask_demod.">
+<!--
+  ASK modem explorer — single file, no dependencies.
+  Host it as-is (GitHub Pages: rename to index.html, or keep the name and open it from Pages).
+  It is a behavioural model of the data path, not a clock-accurate RTL simulation.
+-->
+<style>
+:root{
+  --bg:#fafaf7; --card:#ffffff; --ink:#1f1e1c; --muted:#6b6a64; --line:#e2e0d8; --code-bg:#f3f2ec;
+  --purple:#534AB7; --purple-bg:#EEEDFE; --purple-sel:#CECBF6; --wave:#534AB7;
+  --coral:#C4491F; --coral-bg:#FAECE7; --coral-sel:#F5C4B3;
+  --teal:#0F6E56; --teal-bg:#E1F5EE; --red:#A32D2D; --red-bg:#FCEBEB; --amber:#854F0B;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#161614; --card:#1f1f1c; --ink:#ecebe5; --muted:#a09f97; --line:#34332f; --code-bg:#262623;
+    --purple:#AFA9EC; --purple-bg:#26215C; --purple-sel:#3C3489; --wave:#AFA9EC;
+    --coral:#F0997B; --coral-bg:#4A1B0C; --coral-sel:#712B13;
+    --teal:#5DCAA5; --teal-bg:#04342C; --red:#F09595; --red-bg:#501313; --amber:#EF9F27;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:26px;font-weight:600;margin:0 0 4px}
+h2{font-size:18px;font-weight:600;margin:0 0 10px}
+h3{font-size:14px;font-weight:600;margin:14px 0 4px;color:var(--muted);text-transform:none}
+.sub{color:var(--muted);margin:0 0 18px;max-width:760px}
+code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+code{font-size:.9em;background:var(--code-bg);padding:1px 5px;border-radius:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:14px 0}
+.hint{color:var(--muted);font-size:14px;margin:0 0 8px}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px 22px}
+.ctl label{display:block;font-size:14px;margin-bottom:4px}
+.ctl.wide{grid-column:1/-1}
+.ctl.mid{grid-column:span 2}
+@media (max-width:520px){.ctl.mid{grid-column:auto}}
+.ctl input[type=range]{width:100%}
+.ctl select,.ctl input[type=text],.ctl input[type=number]{width:100%;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+.ctl input[type=text]{font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.12em;max-width:260px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+output{font-variant-numeric:tabular-nums;color:var(--purple);font-weight:600;margin-left:6px}
+button{font:inherit;font-size:14px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--purple)}
+button.primary{background:var(--purple);border-color:var(--purple);color:var(--bg);font-weight:600}
+button:focus-visible,.blk:focus-visible,.srow:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--purple);outline-offset:2px}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.result{margin:12px 0 0;padding:8px 12px;border-radius:8px;font:600 14px ui-monospace,Menlo,Consolas,monospace;border:1px solid var(--line)}
+.result.ok{background:var(--teal-bg);color:var(--teal);border-color:var(--teal)}
+.result.bad{background:var(--red-bg);color:var(--red);border-color:var(--red)}
+.svgwrap{overflow-x:auto}
+#diagram{display:block;width:100%;min-width:640px;height:auto}
+.blk{cursor:pointer;outline:none}
+.blk rect{fill:var(--purple-bg);stroke:var(--purple);stroke-width:1.2}
+.blk.io rect{fill:var(--coral-bg);stroke:var(--coral)}
+.blk text{fill:var(--ink);font:600 12px system-ui,sans-serif}
+.blk .s{font:400 10.5px system-ui,sans-serif;fill:var(--muted)}
+.blk:hover rect{stroke-width:2.5}
+.blk.sel rect{stroke-width:3;fill:var(--purple-sel)}
+.blk.io.sel rect{fill:var(--coral-sel)}
+.cont{fill:none;stroke:var(--muted);stroke-width:1.2;stroke-dasharray:5 4;opacity:.7}
+.ctitle{font:500 11px system-ui,sans-serif;fill:var(--muted)}
+.wire{stroke:var(--muted);stroke-width:1.5;fill:none}
+#scope{margin-top:6px}
+.srow{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:10px;margin:6px 0;background:var(--card);cursor:pointer;overflow:hidden}
+.srow.sel{border-color:var(--purple);box-shadow:0 0 0 2px var(--purple-sel)}
+.srow.ruler{cursor:default;border-color:transparent;background:none}
+.slabel{width:120px;flex:none;padding:6px 10px;display:flex;flex-direction:column;justify-content:center;border-right:1px solid var(--line);font-size:13px;line-height:1.25}
+.ruler .slabel{border-right-color:transparent}
+.slabel b{font:600 13px ui-monospace,Menlo,Consolas,monospace}
+.slabel small{color:var(--muted);font-size:11px}
+.srow canvas{flex:1;min-width:0;width:100%;height:64px;display:block}
+.srow.ruler canvas{height:24px}
+.two{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px}
+pre{margin:0;padding:12px;background:var(--code-bg);border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.5}
+ul{margin:4px 0;padding-left:20px}
+li{margin:4px 0}
+.live{background:var(--code-bg);border-radius:8px;padding:8px 12px;font-size:14px;margin:4px 0}
+dl.calc{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin:12px 0 0;font-size:14px}
+dl.calc dt{color:var(--muted)}
+dl.calc dd{margin:0;font-variant-numeric:tabular-nums}
+.warn{color:var(--amber);font-size:14px;margin:8px 0 0}
+.notes li{margin:8px 0}
+footer{color:var(--muted);font-size:13px;margin-top:20px}
+@media (max-width:760px){
+  .two{grid-template-columns:1fr}
+  .slabel{width:92px;padding:6px}
+  h1{font-size:22px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>ASK modem explorer</h1>
+  <p class="sub">Click any block or trace to see what it does, the Verilog behind it, and how the signal changes at that point. Built around <code>top.v</code> (<code>ask_modem_top</code>), <code>sine.v</code> (<code>sinus_gen</code>) and <code>ask_demodulator.v</code> (<code>ask_demod</code>).</p>
+  <noscript><p class="sub">This page needs JavaScript to draw the waveforms.</p></noscript>
+</header>
+
+<section class="card" aria-labelledby="h-controls">
+  <h2 id="h-controls">Signal controls</h2>
+  <div class="controls">
+    <div class="ctl wide">
+      <label for="bits">Data bits sent on <code>data_in</code> (up to 12)</label>
+      <div class="row">
+        <input id="bits" type="text" inputmode="numeric" maxlength="12" value="10110010" spellcheck="false" autocomplete="off">
+        <button type="button" data-preset="10110010">Default</button>
+        <button type="button" data-preset="10101010">Alternating</button>
+        <button type="button" id="rand">Random</button>
+      </div>
+    </div>
+    <div class="ctl"><label for="cpb">Carrier cycles per bit<output id="o-cpb">4</output></label><input id="cpb" type="range" min="1" max="8" step="1" value="4"></div>
+    <div class="ctl"><label for="noise">Channel noise<output id="o-noise">0%</output></label><input id="noise" type="range" min="0" max="100" step="1" value="0"></div>
+    <div class="ctl"><label for="thr">Decision threshold<output id="o-thr">50%</output></label><input id="thr" type="range" min="0" max="100" step="1" value="50"></div>
+    <div class="ctl"><label for="phase">Reference phase offset<output id="o-phase">0°</output></label><input id="phase" type="range" min="0" max="180" step="5" value="0"></div>
+    <div class="ctl mid"><label for="mode">Sine table format</label>
+      <select id="mode">
+        <option value="fixed">Signed, corrected (clean sine)</option>
+        <option value="asis">sine.mem read as signed (current RTL)</option>
+      </select>
+    </div>
+    <div class="ctl"><label for="speed">Playback speed<output id="o-speed">1×</output></label><input id="speed" type="range" min="0.25" max="4" step="0.25" value="1"></div>
+  </div>
+  <div class="btns">
+    <button type="button" id="play" class="primary">Play</button>
+    <button type="button" id="all">Show all</button>
+    <button type="button" id="reroll">Re-roll noise</button>
+  </div>
+  <p id="result" class="result" aria-live="polite"></p>
+</section>
+
+<section class="card" aria-labelledby="h-diagram">
+  <h2 id="h-diagram">Block diagram</h2>
+  <p class="hint">Dashed boxes are modules. Coral blocks are the top-level ports, purple blocks are logic.</p>
+  <div class="svgwrap">
+  <svg id="diagram" viewBox="0 0 760 206" role="group" aria-label="Block diagram of the ASK modem">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M2 1L8 5L2 9" fill="none" style="stroke:var(--muted)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+    <rect class="cont" x="132" y="8" width="118" height="190" rx="12"/>
+    <text class="ctitle" x="142" y="24">ask_modem_top</text>
+    <rect class="cont" x="258" y="8" width="368" height="190" rx="12"/>
+    <text class="ctitle" x="268" y="24">ask_demod</text>
+
+    <path class="wire" d="M104 154H140" marker-end="url(#ah)"/>
+    <path class="wire" d="M188 88V126" marker-end="url(#ah)"/>
+    <path class="wire" d="M232 154H268" marker-end="url(#ah)"/>
+    <path class="wire" d="M316 88V126" marker-end="url(#ah)"/>
+    <path class="wire" d="M360 154H396" marker-end="url(#ah)"/>
+    <path class="wire" d="M488 154H524" marker-end="url(#ah)"/>
+    <path class="wire" d="M616 154H652" marker-end="url(#ah)"/>
+
+    <g class="blk io" data-id="din" tabindex="0" role="button" aria-label="data_in, input source"><rect x="16" y="130" width="88" height="48" rx="8"/><text x="60" y="150" text-anchor="middle">data_in</text><text class="s" x="60" y="166" text-anchor="middle">1-bit input</text></g>
+    <g class="blk" data-id="gen" tabindex="0" role="button" aria-label="sinus_gen, transmit carrier"><rect x="144" y="40" width="88" height="48" rx="8"/><text x="188" y="60" text-anchor="middle">sinus_gen</text><text class="s" x="188" y="76" text-anchor="middle">TX carrier</text></g>
+    <g class="blk" data-id="gate" tabindex="0" role="button" aria-label="ASK gate"><rect x="144" y="130" width="88" height="48" rx="8"/><text x="188" y="150" text-anchor="middle">ASK gate</text><text class="s" x="188" y="166" text-anchor="middle">gate carrier</text></g>
+    <g class="blk" data-id="ref" tabindex="0" role="button" aria-label="sinus_gen, receive reference"><rect x="272" y="40" width="88" height="48" rx="8"/><text x="316" y="60" text-anchor="middle">sinus_gen</text><text class="s" x="316" y="76" text-anchor="middle">RX reference</text></g>
+    <g class="blk" data-id="mul" tabindex="0" role="button" aria-label="Multiplier"><rect x="272" y="130" width="88" height="48" rx="8"/><text x="316" y="150" text-anchor="middle">Multiplier</text><text class="s" x="316" y="166" text-anchor="middle">× ref_sine</text></g>
+    <g class="blk" data-id="acc" tabindex="0" role="button" aria-label="Accumulator"><rect x="400" y="130" width="88" height="48" rx="8"/><text x="444" y="150" text-anchor="middle">Accumulator</text><text class="s" x="444" y="166" text-anchor="middle">Σ per symbol</text></g>
+    <g class="blk" data-id="cmp" tabindex="0" role="button" aria-label="Comparator"><rect x="528" y="130" width="88" height="48" rx="8"/><text x="572" y="150" text-anchor="middle">Comparator</text><text class="s" x="572" y="166" text-anchor="middle">vs threshold</text></g>
+    <g class="blk io" data-id="dout" tabindex="0" role="button" aria-label="data_out, output"><rect x="656" y="130" width="88" height="48" rx="8"/><text x="700" y="150" text-anchor="middle">data_out</text><text class="s" x="700" y="166" text-anchor="middle">1-bit output</text></g>
+  </svg>
+  </div>
+</section>
+
+<section class="card" aria-labelledby="h-scope">
+  <h2 id="h-scope">Waveforms at each node</h2>
+  <p class="hint">One trace per signal, aligned in time. Vertical dashed lines are symbol boundaries. The dashed coral line on <code>acc</code> is the threshold. Click a trace to select its block.</p>
+  <div id="scope"></div>
+</section>
+
+<section class="card" id="info" aria-labelledby="i-title" aria-live="polite">
+  <h2 id="i-title"></h2>
+  <p id="i-desc" style="margin:0 0 12px"></p>
+  <div class="two">
+    <pre><code id="i-code"></code></pre>
+    <div>
+      <h3>What to try</h3>
+      <ul id="i-tips"></ul>
+      <h3>Right now</h3>
+      <div class="live" id="i-live"></div>
+    </div>
+  </div>
+</section>
+
+<section class="card" aria-labelledby="h-calc">
+  <h2 id="h-calc">Timing calculator</h2>
+  <p class="hint">Change the parameters from <code>sine.v</code> and <code>ask_demodulator.v</code> to see the derived timing.</p>
+  <div class="controls">
+    <div class="ctl"><label for="tc-clk">Clock (MHz) <code>CLK_FREQ</code></label><input id="tc-clk" type="number" value="100" min="1" step="1"></div>
+    <div class="ctl"><label for="tc-f">Target carrier (Hz) <code>SINE_FREQ</code></label><input id="tc-f" type="number" value="10000" min="1" step="1"></div>
+    <div class="ctl"><label for="tc-size">Table size <code>SIZE</code></label><input id="tc-size" type="number" value="1024" min="2" step="1"></div>
+    <div class="ctl"><label for="tc-sym">Symbol clocks <code>SYMBOL_CYCLES</code></label><input id="tc-sym" type="number" value="400000" min="1" step="1"></div>
+  </div>
+  <dl class="calc" id="tc-out"></dl>
+  <p class="warn" id="tc-warn"></p>
+</section>
+
+<section class="card" aria-labelledby="h-notes">
+  <h2 id="h-notes">Things to check in the current RTL</h2>
+  <ul class="notes">
+    <li><b>Undriven reset inputs.</b> In <code>top.v</code>, the <code>sinus_gen</code> instance has no <code>.reset</code> and the <code>ask_demod</code> instance has no <code>.rst</code>. The registers have no initial values, so a simulation stays at X until a reset pulse is applied. On the FPGA they power up as 0. Add a reset input and drive both explicitly.</li>
+    <li><b>Offset-binary table read as signed.</b> <code>sine.mem</code> swings from <code>0000</code> to <code>ffff</code> around <code>8000</code>, but <code>rom_memory</code> and <code>sinus</code> are <code>signed [15:0]</code>. Values at or above <code>8000</code> become negative and the wave folds. Subtract <code>16'h8000</code> after reading, or regenerate the table as two's complement. Use the <em>Sine table format</em> control to compare.</li>
+    <li><b>Symbol is not a whole number of carrier cycles.</b> 400,000 clocks ÷ 9,216 clocks per cycle ≈ 43.4 cycles, so each symbol ends part-way through a cycle. See the timing calculator for the nearest whole-cycle value.</li>
+    <li><b>Absolute threshold.</b> <code>THRESHOLD = 100_000</code> is tiny next to the full-scale accumulator value (about 2×10<sup>14</sup> for a 16-bit carrier over 400,000 clocks), so it behaves almost like <code>acc &gt; 0</code>. It gives little noise margin.</li>
+    <li><b>No symbol synchronisation.</b> The demodulator's counter starts when <code>rst</code> is released. Nothing aligns it to the edges of <code>data_in</code>, so a window can straddle two bits.</li>
+    <li><b>Phase-sensitive detection.</b> Two separate <code>sinus_gen</code> instances must stay in phase. Use the phase offset control: at 90° the output of a 1-bit drops to zero, at 180° it flips sign. Correlating against both sine and cosine (I/Q) removes this dependence.</li>
+  </ul>
+</section>
+
+<footer>This page is a behavioural model of the data path (carrier, gate, multiply, integrate, compare). The carrier is drawn with a few cycles per bit for readability; the real design uses about 43. Channel noise and the threshold percentage are teaching aids and are not in the RTL.</footer>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+var SPC = 32;
+function $(s, r){ return (r || document).querySelector(s); }
+function $$(s, r){ return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+
+var S = { bits:[1,0,1,1,0,0,1,0], cpb:4, noise:0, thr:50, phase:0, mode:'fixed', seed:7, speed:1, sel:'gate', t:0, playing:false, sim:null };
+
+function rng(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+var TAB = new Int32Array(1024);
+for (var i = 0; i < 1024; i++) TAB[i] = Math.min(65535, Math.floor(32768 * (1 + Math.sin(2 * Math.PI * i / 1024))));
+
+function car(ph, mode){
+  ph -= Math.floor(ph);
+  var raw = TAB[Math.floor(ph * 1024) % 1024];
+  if (mode === 'fixed') return (raw - 32768) / 32768;
+  return (raw >= 32768 ? raw - 65536 : raw) / 32768;
+}
+
+function simulate(){
+  var bits = S.bits, spb = S.cpb * SPC, N = bits.length * spb, r = rng(S.seed);
+  var din = new Float32Array(N), c = new Float32Array(N), ask = new Float32Array(N),
+      ref = new Float32Array(N), prod = new Float32Array(N), acc = new Float32Array(N);
+  var ideal = 0, n;
+  for (n = 0; n < spb; n++){ var v = car(n / SPC, S.mode); ideal += v * v; }
+  var T = S.thr / 100 * ideal, dec = [], accEnd = [], a = 0;
+  for (n = 0; n < N; n++){
+    din[n] = bits[Math.floor(n / spb)];
+    c[n] = car(n / SPC, S.mode);
+    ask[n] = din[n] * c[n] + (r() * 2 - 1) * S.noise / 100;
+    ref[n] = car(n / SPC + S.phase / 360, S.mode);
+    prod[n] = ask[n] * ref[n];
+    a += prod[n]; acc[n] = a;
+    if ((n + 1) % spb === 0){ accEnd.push(a); dec.push(a > T ? 1 : 0); a = 0; }
+  }
+  return { spb:spb, N:N, din:din, c:c, ask:ask, ref:ref, prod:prod, acc:acc, dec:dec, accEnd:accEnd, T:T, ideal:ideal };
+}
+
+var ROWS = [
+  { id:'din',  name:'data_in',   sub:'input source' },
+  { id:'gen',  name:'sine_wave', sub:'sinus_gen (TX)' },
+  { id:'gate', name:'ask_out',   sub:'ASK gate' },
+  { id:'ref',  name:'ref_sine',  sub:'sinus_gen (RX)' },
+  { id:'mul',  name:'product',   sub:'multiplier' },
+  { id:'acc',  name:'acc',       sub:'accumulator' },
+  { id:'cmp',  name:'decision',  sub:'comparator' },
+  { id:'dout', name:'data_out',  sub:'output' }
+];
+
+var scope = $('#scope');
+var ruler = document.createElement('div');
+ruler.className = 'srow ruler';
+ruler.innerHTML = '<div class="slabel"><small>sent bit</small></div><canvas aria-hidden="true"></canvas>';
+scope.appendChild(ruler);
+var rulerCv = $('canvas', ruler);
+
+ROWS.forEach(function(row){
+  var d = document.createElement('div');
+  d.className = 'srow';
+  d.setAttribute('data-id', row.id);
+  d.setAttribute('tabindex', '0');
+  d.setAttribute('role', 'button');
+  d.setAttribute('aria-label', 'Select ' + row.name + ' (' + row.sub + ')');
+  d.innerHTML = '<div class="slabel"><b>' + row.name + '</b><small>' + row.sub + '</small></div><canvas role="img" aria-label="Waveform of ' + row.name + '"></canvas>';
+  scope.appendChild(d);
+  row.el = d; row.cv = $('canvas', d);
+  d.addEventListener('click', function(){ select(row.id); });
+  d.addEventListener('keydown', function(e){ if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); select(row.id); } });
+});
+
+function css(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+function setup(cv){
+  var dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (!w || !h) return null;
+  var pw = Math.round(w * dpr), ph = Math.round(h * dpr);
+  if (cv.width !== pw || cv.height !== ph){ cv.width = pw; cv.height = ph; }
+  var ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx:ctx, w:w, h:h };
+}
+
+function trace(ctx, arr, w, N, yf, color){
+  ctx.beginPath();
+  for (var n = 0; n < arr.length; n++){
+    var x = n / N * w, y = yf(arr[n]);
+    if (n) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+  }
+  ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.stroke();
+}
+
+function stepPlot(ctx, vals, spb, w, h, N, color){
+  ctx.beginPath();
+  vals.forEach(function(v, k){
+    var x0 = k * spb / N * w, x1 = (k + 1) * spb / N * w, y = v ? h * 0.28 : h * 0.72;
+    if (k) ctx.lineTo(x0, y); else ctx.moveTo(x0, y);
+    ctx.lineTo(x1, y);
+  });
+  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'miter'; ctx.stroke();
+}
+
+function drawRow(row){
+  var s = setup(row.cv); if (!s) return;
+  var ctx = s.ctx, w = s.w, h = s.h, sim = S.sim, N = sim.N, spb = sim.spb, nb = S.bits.length;
+  var cLine = css('--line'), cWave = css('--wave'), cCor = css('--coral'), cTeal = css('--teal'),
+      cRed = css('--red'), cInk = css('--ink');
+  ctx.clearRect(0, 0, w, h);
+
+  ctx.lineWidth = 1; ctx.strokeStyle = cLine; ctx.setLineDash([3, 4]);
+  for (var k = 0; k <= nb; k++){
+    var gx = Math.min(w - 0.5, Math.round(k * spb / N * w) + 0.5);
+    ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  var yr = 1.1 + S.noise / 100;
+  var yA = function(v, rg){ return h / 2 - Math.max(-rg, Math.min(rg, v)) / rg * (h / 2 - 7); };
+  var lo = -sim.ideal * 1.15, hi = sim.ideal * 1.4;
+  var yAcc = function(v){ return h - 8 - (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo) * (h - 16); };
+
+  if (row.id === 'gen' || row.id === 'gate' || row.id === 'ref' || row.id === 'mul'){
+    ctx.strokeStyle = cLine; ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
+  }
+  if (row.id === 'acc'){
+    ctx.strokeStyle = cLine; ctx.beginPath(); ctx.moveTo(0, yAcc(0)); ctx.lineTo(w, yAcc(0)); ctx.stroke();
+  }
+
+  var playX = Math.min(S.t, N) / N * w;
+  var parts = S.t >= N ? [[0, w, 1]] : [[0, playX, 1], [playX, w, 0.22]];
+
+  parts.forEach(function(p){
+    ctx.save();
+    ctx.beginPath(); ctx.rect(p[0], 0, p[1] - p[0], h); ctx.clip();
+    ctx.globalAlpha = p[2];
+    switch (row.id){
+      case 'din':  stepPlot(ctx, S.bits, spb, w, h, N, cCor); break;
+      case 'gen':  trace(ctx, sim.c, w, N, function(v){ return yA(v, 1.15); }, cWave); break;
+      case 'gate': trace(ctx, sim.ask, w, N, function(v){ return yA(v, yr); }, cWave); break;
+      case 'ref':  trace(ctx, sim.ref, w, N, function(v){ return yA(v, 1.15); }, cWave); break;
+      case 'mul':  trace(ctx, sim.prod, w, N, function(v){ return yA(v, yr); }, cWave); break;
+      case 'acc':
+        ctx.setLineDash([5, 4]); ctx.strokeStyle = cCor; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(0, yAcc(sim.T)); ctx.lineTo(w, yAcc(sim.T)); ctx.stroke();
+        ctx.setLineDash([]);
+        trace(ctx, sim.acc, w, N, yAcc, cWave);
+        break;
+      case 'cmp':
+        sim.dec.forEach(function(d, kk){
+          var x = Math.min((kk + 1) * spb / N * w, w - 13), ok = d === S.bits[kk];
+          ctx.beginPath(); ctx.arc(x, h / 2, 11, 0, Math.PI * 2);
+          ctx.fillStyle = css(ok ? '--teal-bg' : '--red-bg'); ctx.fill();
+          ctx.strokeStyle = ok ? cTeal : cRed; ctx.lineWidth = 1.5; ctx.stroke();
+          ctx.fillStyle = cInk; ctx.font = '600 12px system-ui,sans-serif';
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(String(d), x, h / 2 + 0.5);
+        });
+        break;
+      case 'dout': stepPlot(ctx, [0].concat(sim.dec.slice(0, -1)), spb, w, h, N, cCor); break;
+    }
+    ctx.restore();
+  });
+
+  if (S.t < N){
+    ctx.strokeStyle = cInk; ctx.lineWidth = 1; ctx.globalAlpha = 0.6;
+    ctx.beginPath(); ctx.moveTo(playX + 0.5, 0); ctx.lineTo(playX + 0.5, h); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawRuler(){
+  var s = setup(rulerCv); if (!s) return;
+  var ctx = s.ctx, w = s.w, h = s.h, nb = S.bits.length, sw = w / nb;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = css('--muted'); ctx.font = '12px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  S.bits.forEach(function(b, k){
+    ctx.fillText(sw >= 52 ? 'bit ' + k + ' = ' + b : String(b), (k + 0.5) * sw, h / 2);
+  });
+}
+
+function redraw(){
+  if (!S.sim) return;
+  drawRuler();
+  ROWS.forEach(drawRow);
+}
+
+var INFO = {
+  din: {
+    title: 'data_in: input source',
+    desc: 'The bit stream you want to send, a plain 1-bit input of the top module. Each bit is held for one symbol: SYMBOL_CYCLES = 400,000 clocks, which is 4 ms at 100 MHz or 250 bit/s. Nothing in the RTL synchronises it to the demodulator\'s symbol counter.',
+    code: 'module ask_modem_top (\n    input        clk,       // 100 MHz\n    input        data_in,   // digital data to transmit\n    output       data_out,  // demodulated bit\n    output reg signed [15:0] ask_out\n);',
+    tips: ['Edit the bit string in the controls and watch every trace update.', 'In ASK each 1 switches the carrier on and each 0 switches it off (on-off keying).']
+  },
+  gen: {
+    title: 'sinus_gen: carrier generator',
+    desc: 'Reads a 1024-entry sine table (sine.mem) and advances one entry every DIVIDER = 9 clocks. One full carrier cycle is 1024 × 9 = 9,216 clocks, about 10.85 kHz at 100 MHz. It free-runs. It is never gated: the ASK gate decides when it reaches the output.',
+    code: 'localparam integer DIVIDER =\n    CLK_FREQ / (SINE_FREQ * SIZE);   // 9\n\nif (clk_divider == DIVIDER - 1) begin\n    clk_divider <= 0;\n    sinus <= rom_memory[i];\n    sample_valid <= 1\'b1;\n    if (i == SIZE - 1) i <= 0;\n    else i <= i + 1\'b1;\nend else begin\n    clk_divider <= clk_divider + 1\'b1;\nend',
+    tips: ['Switch "Sine table format" to the current-RTL option to see offset-binary data read as signed.', 'The table holds one carrier cycle; more carrier cycles per bit means more averaging in the accumulator.']
+  },
+  gate: {
+    title: 'ASK gate: on-off keying',
+    desc: 'A registered mux in top.v. While data_in is 1 the carrier passes through to ask_out. While data_in is 0, ask_out is forced to zero. That gives two amplitudes, full and none, which is amplitude shift keying.',
+    code: 'always @(posedge clk) begin\n    if (data_in)\n        ask_out <= sine_wave;\n    else\n        ask_out <= 16\'d0;\nend',
+    tips: ['A 1 shows as a carrier burst and a 0 as a flat line.', 'Raise channel noise to see zeros and ones get harder to tell apart.']
+  },
+  ref: {
+    title: 'sinus_gen (reference): local carrier',
+    desc: 'ask_demod has its own sinus_gen. Coherent detection needs this copy to be in phase with the transmit carrier. Here the two generators free-run from their own counters, so a phase offset between them is possible.',
+    code: '// inside ask_demod\nsinus_gen carrier (\n    .clk(clk),\n    .sinus(ref_sine)\n);',
+    tips: ['Drag "Reference phase offset" to 90°: the correlation falls to zero and 1-bits are no longer detected.', 'At 180° the product turns negative and every 1 is read as 0.']
+  },
+  mul: {
+    title: 'Multiplier: mix with the reference',
+    desc: 'Multiplying the received signal by an in-phase copy of the carrier gives sin²(ωt) = ½(1 − cos 2ωt): always positive, with a DC part. When the carrier is absent the product is zero.',
+    code: 'reg signed [31:0] product;\n\nproduct <= ask_in * ref_sine;   // 16 × 16 → 32-bit',
+    tips: ['With zero phase offset every hump is positive and twice the carrier frequency.', 'At 90° the product swings equally positive and negative and averages to zero.']
+  },
+  acc: {
+    title: 'Accumulator: integrate over a symbol',
+    desc: 'Every clock the accumulator adds the product, then it is cleared at the symbol boundary. This integrate-and-dump step averages noise: the DC part of the product grows linearly with time, while zero-mean noise grows much more slowly.',
+    code: 'reg signed [63:0] acc;\n\nacc <= acc + product;\n\nif (count == SYMBOL_CYCLES - 1) begin\n    ...\n    acc   <= 64\'sd0;\n    count <= 0;\nend else begin\n    count <= count + 1;\nend',
+    tips: ['More carrier cycles per bit gives a taller ramp relative to the noise.', 'The ramp drops to 0 at each boundary: that is the dump.']
+  },
+  cmp: {
+    title: 'Comparator: decide the bit',
+    desc: 'On the last clock of each symbol, data_out takes the result of acc > THRESHOLD, then acc and count reset. In the RTL THRESHOLD is an absolute 100,000, tiny next to full scale (about 2×10^14), so it acts almost like acc > 0. The slider here is a percentage of ideal full scale.',
+    code: 'parameter signed [63:0] THRESHOLD = 64\'sd100_000;\n\nif (count == SYMBOL_CYCLES - 1) begin\n    if (acc > THRESHOLD)\n        data_out <= 1\'b1;\n    else\n        data_out <= 1\'b0;\n    ...\nend',
+    tips: ['With noise on, a low threshold lets noise create false 1s and a high one misses real 1s.', 'Teal circles are correct decisions, red are bit errors.']
+  },
+  dout: {
+    title: 'data_out: recovered bits',
+    desc: 'A registered output that updates at each symbol boundary, so it lags data_in by one symbol: the bit sent in symbol k appears during symbol k + 1.',
+    code: 'module ask_demod (\n    ...\n    output reg data_out   // demodulated bit\n);\n\n// top.v probes it in the ILA:\n.probe1(data_out)',
+    tips: ['Compare with data_in: the same pattern, shifted right by one symbol.', 'In top.v the ILA watches data_in, data_out and ask_out.']
+  }
+};
+
+function pct(v){ return Math.round(v / S.sim.ideal * 100); }
+
+var LIVE = {
+  din: function(){ return 'Sending ' + S.bits.join('') + ' (' + S.bits.length + ' bits).'; },
+  gen: function(){
+    return S.mode === 'fixed'
+      ? 'Table read as two\'s complement: a clean sine.'
+      : 'Values at or above 0x8000 read as negative, so the wave folds at 0° and 180° instead of being a smooth sine.';
+  },
+  gate: function(){
+    return S.noise
+      ? 'Channel noise of up to ±' + S.noise + '% of the carrier amplitude is added after the gate. The RTL has no channel; this only shows robustness.'
+      : 'No channel noise: ask_out is exactly the carrier or zero.';
+  },
+  ref: function(){
+    var k = S.bits.indexOf(1);
+    var base = 'Phase offset ' + S.phase + '°. ';
+    return k < 0 ? base + 'There are no 1-bits to measure.'
+      : base + 'The first 1-bit accumulates to ' + pct(S.sim.accEnd[k]) + '% of the ideal value.';
+  },
+  mul: function(){
+    var sum = 0, cnt = 0, sim = S.sim;
+    for (var n = 0; n < sim.N; n++) if (sim.din[n] === 1){ sum += sim.prod[n]; cnt++; }
+    return cnt ? 'Average product during 1-bits: ' + (sum / cnt).toFixed(2) + ' (ideal ' + (sim.ideal / sim.spb).toFixed(2) + ').' : 'There are no 1-bits to average.';
+  },
+  acc: function(){ return 'Value at the end of each symbol, as % of ideal: ' + S.sim.accEnd.map(pct).join(', ') + '.'; },
+  cmp: function(){ return 'Threshold ' + S.thr + '% of ideal (' + S.sim.T.toFixed(1) + ' in model units). Decisions: ' + S.sim.dec.join('') + '.'; },
+  dout: function(){ return 'Received ' + S.sim.dec.join('') + ', sent ' + S.bits.join('') + '. The output during symbol k + 1 is decision k.'; }
+};
+
+function select(id){
+  S.sel = id;
+  $$('.blk').forEach(function(g){ g.classList.toggle('sel', g.getAttribute('data-id') === id); });
+  ROWS.forEach(function(r){ r.el.classList.toggle('sel', r.id === id); });
+  updateInfo();
+}
+
+function updateInfo(){
+  var inf = INFO[S.sel];
+  $('#i-title').textContent = inf.title;
+  $('#i-desc').textContent = inf.desc;
+  $('#i-code').textContent = inf.code;
+  var ul = $('#i-tips'); ul.innerHTML = '';
+  inf.tips.forEach(function(t){ var li = document.createElement('li'); li.textContent = t; ul.appendChild(li); });
+  $('#i-live').textContent = S.sim ? LIVE[S.sel]() : '';
+}
+
+function updateResult(msg){
+  var el = $('#result');
+  if (msg){ el.className = 'result bad'; el.textContent = msg; return; }
+  var err = 0;
+  S.bits.forEach(function(b, k){ if (b !== S.sim.dec[k]) err++; });
+  el.className = 'result ' + (err ? 'bad' : 'ok');
+  el.textContent = 'Sent ' + S.bits.join('') + ' → received ' + S.sim.dec.join('') + ' · ' + err + ' bit error' + (err === 1 ? '' : 's');
+}
+
+function updatePlay(){
+  var b = $('#play');
+  if (S.playing) b.textContent = 'Pause';
+  else if (S.t > 0 && S.t < S.sim.N) b.textContent = 'Resume';
+  else b.textContent = 'Play';
+}
+
+function recompute(){
+  S.sim = simulate();
+  S.t = S.sim.N; S.playing = false;
+  updatePlay(); updateResult(); updateInfo(); redraw();
+}
+
+var last = 0;
+function tick(ts){
+  if (!S.playing) return;
+  var dt = Math.min(0.05, (ts - last) / 1000); last = ts;
+  S.t += dt * SPC * 10 * S.speed;
+  if (S.t >= S.sim.N){ S.t = S.sim.N; S.playing = false; updatePlay(); }
+  redraw();
+  if (S.playing) requestAnimationFrame(tick);
+}
+
+$('#play').addEventListener('click', function(){
+  if (S.playing){ S.playing = false; }
+  else {
+    if (S.t >= S.sim.N) S.t = 0;
+    S.playing = true; last = performance.now(); requestAnimationFrame(tick);
+  }
+  updatePlay(); redraw();
+});
+$('#all').addEventListener('click', function(){ S.playing = false; S.t = S.sim.N; updatePlay(); redraw(); });
+$('#reroll').addEventListener('click', function(){ S.seed = (S.seed * 1664525 + 1013904223) >>> 0; recompute(); });
+
+var bitsEl = $('#bits');
+bitsEl.addEventListener('input', function(){
+  var v = bitsEl.value.replace(/[^01]/g, '').slice(0, 12);
+  if (v !== bitsEl.value) bitsEl.value = v;
+  if (!v){ updateResult('Enter at least one bit (0 or 1).'); return; }
+  S.bits = v.split('').map(Number);
+  recompute();
+});
+$$('[data-preset]').forEach(function(b){
+  b.addEventListener('click', function(){ bitsEl.value = b.getAttribute('data-preset'); bitsEl.dispatchEvent(new Event('input')); });
+});
+$('#rand').addEventListener('click', function(){
+  var s = ''; for (var i = 0; i < 8; i++) s += Math.random() < 0.5 ? '0' : '1';
+  bitsEl.value = s; bitsEl.dispatchEvent(new Event('input'));
+});
+
+var FMT = { cpb:function(v){ return v; }, noise:function(v){ return v + '%'; }, thr:function(v){ return v + '%'; }, phase:function(v){ return v + '°'; }, speed:function(v){ return v + '×'; } };
+Object.keys(FMT).forEach(function(id){
+  var el = $('#' + id);
+  el.addEventListener('input', function(){
+    S[id] = parseFloat(el.value);
+    $('#o-' + id).textContent = FMT[id](el.value);
+    if (id === 'speed'){ return; }
+    recompute();
+  });
+});
+$('#mode').addEventListener('change', function(e){ S.mode = e.target.value; recompute(); });
+
+$$('.blk').forEach(function(g){
+  g.addEventListener('click', function(){ select(g.getAttribute('data-id')); });
+  g.addEventListener('keydown', function(e){ if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); select(g.getAttribute('data-id')); } });
+});
+
+function fmtT(s){
+  if (s >= 1) return s.toFixed(3) + ' s';
+  if (s >= 1e-3) return (s * 1e3).toFixed(3) + ' ms';
+  if (s >= 1e-6) return (s * 1e6).toFixed(2) + ' µs';
+  return (s * 1e9).toFixed(1) + ' ns';
+}
+function fmtF(f){
+  if (f >= 1e6) return (f / 1e6).toFixed(3) + ' MHz';
+  if (f >= 1e3) return (f / 1e3).toFixed(3) + ' kHz';
+  return f.toFixed(1) + ' Hz';
+}
+function num(n){ return Math.round(n).toLocaleString('en-US'); }
+
+function calc(){
+  var clk = parseFloat($('#tc-clk').value) * 1e6, f = parseFloat($('#tc-f').value),
+      size = parseFloat($('#tc-size').value), sym = parseFloat($('#tc-sym').value);
+  var out = $('#tc-out'), warn = $('#tc-warn');
+  warn.textContent = '';
+  if (!(clk > 0 && f > 0 && size > 1 && sym > 0)){ out.innerHTML = ''; warn.textContent = 'Enter positive values in all four fields.'; return; }
+  var div = Math.floor(clk / (f * size));
+  if (div < 1){ out.innerHTML = ''; warn.textContent = 'DIVIDER would be 0: the target carrier is too fast for this clock and table size.'; return; }
+  var cycleClk = div * size, fAct = clk / cycleClk, cps = sym / cycleClk, frac = cps - Math.floor(cps);
+  var best = Math.max(1, Math.round(cps)) * cycleClk;
+  var rows = [
+    ['DIVIDER', String(div) + ' (integer division)'],
+    ['Clock period', fmtT(1 / clk)],
+    ['Sample period', num(div) + ' clocks = ' + fmtT(div / clk)],
+    ['Clocks per carrier cycle', num(cycleClk)],
+    ['Actual carrier frequency', fmtF(fAct) + ' (' + ((fAct / f - 1) * 100).toFixed(1) + '% vs target)'],
+    ['Symbol time and rate', fmtT(sym / clk) + ', ' + (clk / sym).toFixed(1) + ' bit/s'],
+    ['Carrier cycles per symbol', cps.toFixed(2)],
+    ['Leftover part of a cycle', frac.toFixed(2) + (frac < 0.005 || frac > 0.995 ? ' (whole number of cycles)' : '')],
+    ['Nearest whole-cycle symbol', num(best) + ' clocks = ' + fmtT(best / clk)]
+  ];
+  out.innerHTML = '';
+  rows.forEach(function(r){
+    var dt = document.createElement('dt'), dd = document.createElement('dd');
+    dt.textContent = r[0]; dd.textContent = r[1]; out.appendChild(dt); out.appendChild(dd);
+  });
+  if (size !== 1024) warn.textContent = 'The RTL index register is reg [9:0] i, so the table size is limited to 1024 entries.';
+}
+['tc-clk', 'tc-f', 'tc-size', 'tc-sym'].forEach(function(id){ $('#' + id).addEventListener('input', calc); });
+
+if (window.ResizeObserver) new ResizeObserver(redraw).observe(scope); else window.addEventListener('resize', redraw);
+if (window.matchMedia){
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  if (mq.addEventListener) mq.addEventListener('change', redraw);
+}
+
+recompute();
+select('gate');
+calc();
+})();
+</script>
+</body>
+</html>
